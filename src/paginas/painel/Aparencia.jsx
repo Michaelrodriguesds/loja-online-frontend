@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { Aviso, Botao, Campo, Chave, Girando, useToast } from '../../componentes/ui';
 import EscolherTema from '../../componentes/EscolherTema';
-import { SEGMENTOS, comprimirImagem } from '../../utils';
+import { SEGMENTOS, comprimirImagem, enviarFoto } from '../../utils';
 import { usePainel } from './LayoutPainel';
 
 export default function Aparencia() {
@@ -24,7 +24,7 @@ export default function Aparencia() {
     setErro('');
     try {
       const dados = await comprimirImagem(arquivo, lado);
-      const r = await api('/painel/imagens', { metodo: 'POST', corpo: { dados } });
+      const r = await enviarFoto(api, dados);
       setF((atual) => ({ ...atual, [campo]: r.url }));
     } catch (e) { setErro(e.message); } finally { setEnviando(''); }
   }

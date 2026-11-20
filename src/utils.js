@@ -53,31 +53,63 @@ export function corTextoSobre(hex) {
   return lum > 0.4 ? '#111111' : '#ffffff';
 }
 
-// Reduz a foto no próprio celular antes de enviar (máx. 1200 px, ~600 KB)
-export function comprimirImagem(arquivo, ladoMax = 1200) {
+// Reduz a foto no próprio celular antes de enviar (máx. ~1200 px, ~600 KB).
+// Usa createImageBitmap já reduzindo na leitura: uma foto de 50 MP não é aberta
+// inteira na memória (era isso que travava celulares com pouca RAM).
+async function abrirReduzida(arquivo, ladoMax) {
+  if ('createImageBitmap' in window) {
+    try {
+      // 1ª leitura só para saber se é retrato ou paisagem, já bem pequena
+      const amostra = await createImageBitmap(arquivo, { resizeWidth: 64, imageOrientation: 'from-image' });
+      const retrato = amostra.height > amostra.width;
+      amostra.close();
+      const opcoes = retrato ? { resizeHeight: ladoMax } : { resizeWidth: ladoMax };
+      return await createImageBitmap(arquivo, { ...opcoes, resizeQuality: 'medium', imageOrientation: 'from-image' });
+    } catch {
+      // navegador antigo: cai no método abaixo
+    }
+  }
   return new Promise((resolve, reject) => {
-    if (!arquivo.type.startsWith('image/')) return reject(new Error('Escolha um arquivo de imagem.'));
     const url = URL.createObjectURL(arquivo);
     const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const escala = Math.min(1, ladoMax / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * escala);
-      canvas.height = Math.round(img.height * escala);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      let qualidade = 0.82;
-      let dados = canvas.toDataURL('image/webp', qualidade);
-      if (!dados.startsWith('data:image/webp')) dados = canvas.toDataURL('image/jpeg', qualidade); // iPhone antigo
-      while (dados.length > 850_000 && qualidade > 0.4) {
-        qualidade -= 0.12;
-        dados = canvas.toDataURL(dados.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg', qualidade);
-      }
-      resolve(dados);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Não foi possível ler esta foto.')); };
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Não foi possível ler esta foto. Tente outra ou tire um print dela.')); };
     img.src = url;
   });
+}
+
+export async function comprimirImagem(arquivo, ladoMax = 1200) {
+  if (!arquivo.type.startsWith('image/') && !/\.(jpe?g|png|webp|heic)$/i.test(arquivo.name)) throw new Error('Escolha um arquivo de imagem.');
+  const img = await abrirReduzida(arquivo, ladoMax);
+  const escala = Math.min(1, ladoMax / Math.max(img.width, img.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.width * escala);
+  canvas.height = Math.round(img.height * escala);
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  if (img.close) img.close();
+  let qualidade = 0.82;
+  let dados = canvas.toDataURL('image/webp', qualidade);
+  const tipo = dados.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg'; // iPhone antigo não gera webp
+  if (tipo === 'image/jpeg') dados = canvas.toDataURL(tipo, qualidade);
+  while (dados.length > 850_000 && qualidade > 0.4) {
+    qualidade -= 0.12;
+    dados = canvas.toDataURL(tipo, qualidade);
+  }
+  canvas.width = 0; canvas.height = 0; // libera a memória do canvas
+  return dados;
+}
+
+// Envia uma foto e tenta de novo se o servidor estiver reiniciando (502/503/504)
+export async function enviarFoto(api, dados) {
+  for (let tentativa = 1; ; tentativa++) {
+    try {
+      return await api('/painel/imagens', { metodo: 'POST', corpo: { dados } });
+    } catch (e) {
+      const temporario = e.status === 0 || [502, 503, 504].includes(e.status);
+      if (!temporario || tentativa >= 3) throw e;
+      await new Promise((r) => setTimeout(r, 4000));
+    }
+  }
 }
 
 // Busca o endereço pelo CEP (ViaCEP, grátis)

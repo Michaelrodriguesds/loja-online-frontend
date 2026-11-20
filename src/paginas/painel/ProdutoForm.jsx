@@ -3,16 +3,25 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api';
 import { Aviso, Botao, Campo, Carregando, Chave, Girando, useToast } from '../../componentes/ui';
-import { comprimirImagem, lerValor } from '../../utils';
+import { comprimirImagem, enviarFoto, lerValor } from '../../utils';
 
 const novaVariacao = () => ({ tamanho: '', cor: '', estoque: '1' });
+const produtoVazio = () => ({ nome: '', descricao: '', categoria: '', preco: '', fotos: [], soNoLocal: false, ativo: true, variacoes: [{ tamanho: 'Único', cor: '', estoque: '1' }] });
+
+// Rascunho guardado no aparelho: se o celular fechar o navegador ao abrir a
+// câmera (pouca memória), o formulário volta preenchido ao reabrir.
+const chaveRascunho = (id) => `rascunho-produto:${id || 'novo'}`;
+function lerRascunho(id) {
+  try { return JSON.parse(sessionStorage.getItem(chaveRascunho(id))) || null; } catch { return null; }
+}
 
 export default function ProdutoForm() {
   const { id } = useParams();
   const editando = Boolean(id);
   const navegar = useNavigate();
   const toast = useToast();
-  const [p, setP] = useState(editando ? null : { nome: '', descricao: '', categoria: '', preco: '', fotos: [], soNoLocal: false, ativo: true, variacoes: [{ tamanho: 'Único', cor: '', estoque: '1' }] });
+  const [p, setP] = useState(() => lerRascunho(id) || (editando ? null : produtoVazio()));
+  const [recuperado] = useState(() => Boolean(lerRascunho(id)));
   const [status, setStatus] = useState(null);
   const [categorias, setCategorias] = useState([]);
   const [erro, setErro] = useState('');
@@ -23,10 +32,15 @@ export default function ProdutoForm() {
     api('/painel/produtos').then((l) => setCategorias([...new Set(l.map((x) => x.categoria).filter(Boolean))])).catch(() => {});
     if (!editando) return;
     api(`/painel/produtos/${id}`).then((d) => {
-      setP({ ...d, preco: String(d.preco).replace('.', ','), variacoes: d.variacoes.map((v) => ({ ...v, estoque: String(v.estoque) })) });
+      if (!lerRascunho(id)) setP({ ...d, preco: String(d.preco).replace('.', ','), variacoes: d.variacoes.map((v) => ({ ...v, estoque: String(v.estoque) })) });
       setStatus({ status: d.status, motivo: d.motivoModeracao });
     }).catch((e) => setErro(e.message));
   }, [id, editando]);
+
+  useEffect(() => {
+    if (p) { try { sessionStorage.setItem(chaveRascunho(id), JSON.stringify(p)); } catch { /* sem espaço: ignora */ } }
+  }, [p, id]);
+  const limparRascunho = () => sessionStorage.removeItem(chaveRascunho(id));
 
   if (erro && !p) return <Aviso tipo="erro">{erro}</Aviso>;
   if (!p) return <Carregando />;
@@ -44,7 +58,7 @@ export default function ProdutoForm() {
       const novas = [];
       for (const arq of arquivos) {
         const dados = await comprimirImagem(arq);
-        const r = await api('/painel/imagens', { metodo: 'POST', corpo: { dados } });
+        const r = await enviarFoto(api, dados);
         novas.push(r.url);
       }
       setP((atual) => ({ ...atual, fotos: [...atual.fotos, ...novas] }));
@@ -66,6 +80,7 @@ export default function ProdutoForm() {
     try {
       const corpo = { nome: p.nome, descricao: p.descricao, categoria: p.categoria.trim() || 'Outros', preco, fotos: p.fotos, soNoLocal: p.soNoLocal, ativo: p.ativo, variacoes };
       const r = await api(editando ? `/painel/produtos/${id}` : '/painel/produtos', { metodo: editando ? 'PUT' : 'POST', corpo });
+      limparRascunho();
       toast(r.status === 'analise' ? 'Salvo. O produto vai aparecer depois da análise do suporte.' : 'Produto salvo!');
       navegar('/painel/produtos');
     } catch (err) {
@@ -80,6 +95,7 @@ export default function ProdutoForm() {
     if (!window.confirm(`Excluir "${p.nome}"? Não dá para desfazer.`)) return;
     try {
       await api(`/painel/produtos/${id}`, { metodo: 'DELETE' });
+      limparRascunho();
       toast('Produto excluído.');
       navegar('/painel/produtos');
     } catch (err) { setErro(err.message); }
@@ -87,14 +103,15 @@ export default function ProdutoForm() {
 
   return (
     <form className="pilha" onSubmit={salvar} style={{ maxWidth: 640 }}>
-      <button type="button" className="btn btn-texto" style={{ alignSelf: 'flex-start', paddingLeft: 0 }} onClick={() => navegar('/painel/produtos')}>← Produtos</button>
+      <button type="button" className="btn btn-texto" style={{ alignSelf: 'flex-start', paddingLeft: 0 }} onClick={() => { limparRascunho(); navegar('/painel/produtos'); }}>← Produtos</button>
       <h1>{editando ? 'Editar produto' : 'Novo produto'}</h1>
       {status?.status === 'analise' ? <Aviso tipo="alerta">Em análise pelo suporte{status.motivo ? ` (${status.motivo})` : ''}. Ainda não aparece na loja.</Aviso> : null}
       {status?.status === 'oculto' ? <Aviso tipo="erro">Ocultado pelo suporte: {status.motivo}. Fale com o suporte para liberar.</Aviso> : null}
+      {recuperado ? <Aviso tipo="info">Recuperamos o que você estava preenchendo.</Aviso> : null}
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
 
       <section className="cartao pilha">
-        <span className="pequeno suave">Fotos (até 5) — a primeira é a capa</span>
+        <span className="pequeno suave">Fotos (até 5) — a primeira é a capa. Se o celular travar na câmera, use “Galeria”.</span>
         <div className="fotos-produto">
           {p.fotos.map((f, i) => (
             <div key={f} className="foto-produto">
