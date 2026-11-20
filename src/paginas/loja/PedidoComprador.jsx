@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { Aviso, Botao, BotaoCopiar, Carregando, useToast } from '../../componentes/ui';
-import { linkWhatsapp, reais } from '../../utils';
+import { FORMAS_ENTREGA, linkWhatsapp, reais } from '../../utils';
 import { useLoja } from './LayoutLoja';
 
 function etapas(p) {
@@ -65,7 +65,7 @@ export default function PedidoComprador() {
       <div className="cartao linha-entre">
         <div className="pilha-p" style={{ gap: 0 }}>
           <strong>Pedido #{p.numero}</strong>
-          <span className="pequeno suave">{p.itens.reduce((t, i) => t + i.qtd, 0)} itens · {p.modo === 'entrega' ? 'Entrega' : 'Retirada'} · {p.pagamento === 'pix' ? 'Pix' : 'Pagar na entrega/retirada'}</span>
+          <span className="pequeno suave">{(() => { const n = p.itens.reduce((t, i) => t + i.qtd, 0); return `${n} ${n === 1 ? 'item' : 'itens'}`; })()} · {p.modo === 'entrega' ? 'Entrega' : 'Retirada'} · {p.pagamento === 'pix' ? 'Pix pelo app' : `${FORMAS_ENTREGA[p.formaNaEntrega] || 'Pagar'} ${p.modo === 'entrega' ? 'na entrega' : 'na loja'}`}</span>
         </div>
         <strong style={{ fontSize: 18 }}>{reais(p.total)}</strong>
       </div>
@@ -107,7 +107,14 @@ export default function PedidoComprador() {
         </div>
       ) : null}
 
-      {p.status === 'em_preparo' && p.pagamento === 'na_entrega' ? <Aviso tipo="info">Pedido aprovado! Você paga {reais(p.total)} {p.modo === 'entrega' ? 'na entrega' : 'na retirada'}.</Aviso> : null}
+      {p.pagamento === 'na_entrega' && !['recusado', 'cancelado', 'concluido'].includes(p.status) ? (
+        <Aviso tipo="info">
+          {p.status === 'aguardando_aprovacao' ? 'Depois da aprovação, você' : 'Você'} paga {reais(p.total)} {p.modo === 'entrega' ? 'na entrega' : 'na loja'}
+          {p.formaNaEntrega ? ` com ${FORMAS_ENTREGA[p.formaNaEntrega].toLowerCase()}` : ''}
+          {p.formaNaEntrega?.startsWith('cartao') ? ' (aproximação na maquininha)' : ''}
+          {p.trocoPara ? ` — troco para ${reais(p.trocoPara)}` : ''}.
+        </Aviso>
+      ) : null}
       {p.modo === 'retirada' && p.retiradaEndereco && !['recusado', 'cancelado'].includes(p.status) ? <Aviso tipo="info">Retirada em: {p.retiradaEndereco}</Aviso> : null}
 
       <div className="cartao pilha-p">

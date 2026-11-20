@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { api } from '../../api';
 import { Aviso, Botao, Campo, Chave, useToast } from '../../componentes/ui';
-import { lerValor, reais } from '../../utils';
+import { FORMAS_ENTREGA, TODAS_FORMAS, lerValor, reais } from '../../utils';
 import { usePainel } from './LayoutPainel';
 
 const paraTexto = (n) => String(n ?? '').replace('.', ',');
@@ -12,7 +12,7 @@ export default function EntregaPix() {
   const toast = useToast();
   const [e, setE] = useState({ ...loja.entrega, valorKm: paraTexto(loja.entrega.valorKm), taxaMinima: paraTexto(loja.entrega.taxaMinima), raioMaxKm: String(loja.entrega.raioMaxKm) });
   const [end, setEnd] = useState({ texto: loja.endereco.texto, cidade: loja.endereco.cidade, uf: loja.endereco.uf || 'RJ' });
-  const [pg, setPg] = useState({ ...loja.pagamento });
+  const [pg, setPg] = useState({ ...loja.pagamento, formasNaEntrega: loja.pagamento.formasNaEntrega?.length ? loja.pagamento.formasNaEntrega : TODAS_FORMAS });
   const [horas, setHoras] = useState(String(loja.regras?.horasParaExpirar || 12));
   const [novaCidade, setNovaCidade] = useState('');
   const [erro, setErro] = useState('');
@@ -41,12 +41,12 @@ export default function EntregaPix() {
         corpo: {
           entrega: { ativa: e.ativa, valorKm, taxaMinima: taxa, raioMaxKm: Number(e.raioMaxKm), calculo: e.calculo, cidades: e.cidades, prazo: e.prazo, retiradaAtiva: e.retiradaAtiva, prazoRetirada: e.prazoRetirada },
           endereco: end,
-          pagamento: { tipoChave: pg.tipoChave || '', chavePix: pg.chavePix.trim(), nomeRecebedor: pg.nomeRecebedor.trim(), cidade: pg.cidade.trim(), aceitaNaEntrega: pg.aceitaNaEntrega },
+          pagamento: { tipoChave: pg.tipoChave || '', chavePix: pg.chavePix.trim(), nomeRecebedor: pg.nomeRecebedor.trim(), cidade: pg.cidade.trim(), aceitaNaEntrega: pg.aceitaNaEntrega, formasNaEntrega: pg.formasNaEntrega },
           regras: { horasParaExpirar: Math.min(168, Math.max(1, parseInt(horas, 10) || 12)) },
         },
       });
       if (r.avisoEndereco) setAviso(r.avisoEndereco);
-      setPg({ ...r.loja.pagamento }); // mostra a chave já no formato do banco
+      setPg({ ...r.loja.pagamento, formasNaEntrega: r.loja.pagamento.formasNaEntrega?.length ? r.loja.pagamento.formasNaEntrega : TODAS_FORMAS }); // mostra a chave já no formato do banco
       toast('Configurações salvas!');
       recarregar();
     } catch (err) {
@@ -132,7 +132,24 @@ export default function EntregaPix() {
           <Campo rotulo="Nome do recebedor" ajuda="Como aparece no banco"><input value={pg.nomeRecebedor} maxLength={25} onChange={(x) => setPg({ ...pg, nomeRecebedor: x.target.value })} /></Campo>
           <Campo rotulo="Cidade do recebedor"><input value={pg.cidade} maxLength={15} onChange={(x) => setPg({ ...pg, cidade: x.target.value })} /></Campo>
         </div>
-        <Chave ligado={pg.aceitaNaEntrega} aoMudar={(v) => setPg({ ...pg, aceitaNaEntrega: v })} rotulo="Aceitar pagamento na entrega/retirada" descricao="Você decide pedido a pedido ao aprovar" />
+        <Chave ligado={pg.aceitaNaEntrega} aoMudar={(v) => setPg({ ...pg, aceitaNaEntrega: v })} rotulo="Aceitar pagamento na entrega/retirada" descricao="Pelo app o cliente só paga com Pix. Aqui você diz o que aceita pessoalmente" />
+        {pg.aceitaNaEntrega ? (
+          <div className="pilha-p">
+            <span className="pequeno suave">Na entrega ou na loja você aceita:</span>
+            <div className="grade-2">
+              {TODAS_FORMAS.map((f) => {
+                const marcada = pg.formasNaEntrega.includes(f);
+                return (
+                  <button type="button" key={f} className="filtro" style={{ borderRadius: 12, minHeight: 46 }} aria-pressed={marcada}
+                    onClick={() => setPg({ ...pg, formasNaEntrega: marcada ? pg.formasNaEntrega.filter((x) => x !== f) : [...pg.formasNaEntrega, f] })}>
+                    {marcada ? '✓ ' : ''}{FORMAS_ENTREGA[f]}
+                  </button>
+                );
+              })}
+            </div>
+            <small className="suave">Cartão = maquininha por aproximação, na entrega ou na loja.</small>
+          </div>
+        ) : null}
         <Campo rotulo="Cancelar pedido não aprovado/pago depois de (horas)" ajuda="O estoque volta automaticamente"><input inputMode="numeric" value={horas} onChange={(x) => setHoras(x.target.value.replace(/\D/g, ''))} /></Campo>
       </section>
 

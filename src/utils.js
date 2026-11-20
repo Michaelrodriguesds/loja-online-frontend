@@ -31,6 +31,14 @@ export const TEMAS = {
 // Tema sugerido para cada segmento (o lojista pode trocar)
 export const TEMA_DO_SEGMENTO = { barbearia: 'urbano', moda: 'clean', acessorios: 'clean', calcados: 'clean', beleza: 'delicado', variedades: 'vibrante', alimentos: 'vibrante', outro: 'clean' };
 
+export const FORMAS_ENTREGA = {
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+  pix: 'Pix na hora',
+  dinheiro: 'Dinheiro',
+};
+export const TODAS_FORMAS = Object.keys(FORMAS_ENTREGA);
+
 export const STATUS = {
   aguardando_aprovacao: { nome: 'Aguardando aprovação', cor: 'ambar' },
   aguardando_cliente: { nome: 'Aguardando cliente aceitar frete', cor: 'ambar' },

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../api';
 import { Aviso, Botao, Campo, Carregando, Modal, Selo, useToast } from '../../componentes/ui';
-import { STATUS, dataHora, lerValor, linkWhatsapp, reais } from '../../utils';
+import { FORMAS_ENTREGA, STATUS, dataHora, lerValor, linkWhatsapp, reais } from '../../utils';
 import { usePainel } from './LayoutPainel';
 
 export default function PedidoDetalhe() {
@@ -81,7 +81,9 @@ export default function PedidoDetalhe() {
           {p.modo === 'entrega' ? <div className="linha-entre suave"><span>Frete {p.freteFinal == null ? '(estimado)' : ''}</span><span>{p.freteFinal != null ? reais(p.freteFinal) : p.freteEstimado != null ? reais(p.freteEstimado) : 'a combinar'}</span></div> : null}
           <div className="linha-entre total"><span>Total</span><span>{reais(p.total)}</span></div>
         </div>
-        <span className="pequeno suave">Pagamento: {p.pagamento === 'pix' ? 'Pix' : 'na entrega/retirada'}{p.pago ? ' · pago ✔' : ''}</span>
+        <span className="pequeno suave">Pagamento: {p.pagamento === 'pix' ? 'Pix pelo app' : `${FORMAS_ENTREGA[p.formaNaEntrega] || 'pessoalmente'} ${p.modo === 'entrega' ? 'na entrega' : 'na loja'}`}{p.pago ? ' · pago ✔' : ''}</span>
+        {p.pagamento === 'na_entrega' && p.formaNaEntrega?.startsWith('cartao') && !p.pago ? <Aviso tipo="alerta">Leve a maquininha: {FORMAS_ENTREGA[p.formaNaEntrega].toLowerCase()} por aproximação.</Aviso> : null}
+        {p.trocoPara ? <Aviso tipo="alerta">Cliente vai pagar com {reais(p.trocoPara)}{p.trocoPara > p.total ? ` — leve ${reais(p.trocoPara - p.total)} de troco` : ''}.</Aviso> : null}
       </section>
 
       <section className="cartao pilha">

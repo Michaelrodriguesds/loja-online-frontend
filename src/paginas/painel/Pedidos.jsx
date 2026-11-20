@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api';
 import { Aviso, Carregando, Selo, Vazio } from '../../componentes/ui';
-import { dataHora, reais } from '../../utils';
+import { FORMAS_ENTREGA, dataHora, reais } from '../../utils';
 import { usePainel } from './LayoutPainel';
 
 const GRUPOS = [['aguardando', 'Aguardando você'], ['andamento', 'Em andamento'], ['finalizados', 'Finalizados'], ['todos', 'Todos']];
@@ -43,7 +43,7 @@ export default function Pedidos() {
                 <span className="pequeno suave corta">
                   {p.itens.reduce((t, i) => t + i.qtd, 0)} {p.itens.length === 1 && p.itens[0].qtd === 1 ? 'item' : 'itens'} · {p.modo === 'entrega' ? `Entrega · ${p.endereco?.bairro || ''}, ${p.endereco?.cidade || ''}${p.distanciaKm ? ` · ${String(p.distanciaKm).replace('.', ',')} km` : ''}` : 'Retirada'}
                 </span>
-                <div className="linha-entre pequeno"><span className="suave">{p.pagamento === 'pix' ? 'Pix' : 'Paga na entrega/retirada'} · {dataHora(p.createdAt)}</span><strong>{reais(p.total)}</strong></div>
+                <div className="linha-entre pequeno"><span className="suave">{p.pagamento === 'pix' ? 'Pix' : FORMAS_ENTREGA[p.formaNaEntrega] || 'Paga na entrega'} · {dataHora(p.createdAt)}</span><strong>{reais(p.total)}</strong></div>
               </div>
             </Link>
           ))}

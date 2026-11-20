@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Aviso, Botao, Girando, Vazio } from '../../componentes/ui';
-import { reais } from '../../utils';
+import { FORMAS_ENTREGA, lerValor, reais } from '../../utils';
 import { useLoja } from './LayoutLoja';
 
 export default function Carrinho() {
@@ -11,6 +11,9 @@ export default function Carrinho() {
   const { entrega, pagamento } = loja;
   const [modo, setModo] = useState(entrega.ativa ? 'entrega' : 'retirada');
   const [forma, setForma] = useState(pagamento.pix ? 'pix' : 'na_entrega');
+  const formasLoja = pagamento.formasNaEntrega || [];
+  const [formaEntrega, setFormaEntrega] = useState(formasLoja.includes('cartao_credito') ? 'cartao_credito' : formasLoja[0] || '');
+  const [troco, setTroco] = useState('');
   const [frete, setFrete] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erro, setErro] = useState('');
@@ -32,7 +35,7 @@ export default function Carrinho() {
   const subtotal = carrinho.itens.reduce((t, i) => t + Math.round(i.preco * 100) * i.qtd, 0) / 100;
   const valorFrete = modo === 'entrega' ? frete?.frete ?? 0 : 0;
   const total = (Math.round(subtotal * 100) + Math.round(valorFrete * 100)) / 100;
-  const bloqueado = !loja.aberta || (modo === 'entrega' && (!temEndereco || frete?.foraDaArea || calculando));
+  const bloqueado = !loja.aberta || (modo === 'entrega' && (!temEndereco || frete?.foraDaArea || calculando)) || (forma === 'na_entrega' && !formaEntrega);
 
   async function finalizar() {
     setErro('');
@@ -40,7 +43,10 @@ export default function Carrinho() {
     try {
       const p = await apiComprador('/pedidos', {
         metodo: 'POST',
-        corpo: { itens: carrinho.itens.map((i) => ({ produtoId: i.produtoId, varId: i.varId, qtd: i.qtd })), modo, pagamento: forma },
+        corpo: {
+          itens: carrinho.itens.map((i) => ({ produtoId: i.produtoId, varId: i.varId, qtd: i.qtd })), modo, pagamento: forma,
+          ...(forma === 'na_entrega' ? { formaNaEntrega: formaEntrega, trocoPara: formaEntrega === 'dinheiro' && Number.isFinite(lerValor(troco)) && lerValor(troco) > 0 ? lerValor(troco) : null } : {}),
+        },
       });
       carrinho.limpar();
       navegar(`/loja/${slug}/pedidos/${p._id}?novo=1`);
@@ -122,7 +128,27 @@ export default function Carrinho() {
           <div className="pilha-p">
             <strong>Pagamento</strong>
             {pagamento.pix ? <button className="escolha" aria-pressed={forma === 'pix'} onClick={() => setForma('pix')}><strong>Pix</strong><small>O código aparece depois que a loja aprovar o pedido</small></button> : null}
-            {pagamento.aceitaNaEntrega ? <button className="escolha" aria-pressed={forma === 'na_entrega'} onClick={() => setForma('na_entrega')}><strong>{modo === 'entrega' ? 'Pagar na entrega' : 'Pagar na retirada'}</strong><small>Sujeito à aprovação da loja</small></button> : null}
+            {pagamento.aceitaNaEntrega && formasLoja.length ? (
+              <button className="escolha" aria-pressed={forma === 'na_entrega'} onClick={() => setForma('na_entrega')}>
+                <strong>{modo === 'entrega' ? 'Pagar na entrega' : 'Pagar na loja'}</strong>
+                <small>{formasLoja.map((f) => FORMAS_ENTREGA[f]).join(' · ')} — sujeito à aprovação da loja</small>
+              </button>
+            ) : null}
+            {forma === 'na_entrega' ? (
+              <div className="cartao pilha-p">
+                <span className="pequeno forte">Como vai pagar {modo === 'entrega' ? 'na entrega' : 'na loja'}?</span>
+                <div className="opcoes">
+                  {formasLoja.map((f) => <button key={f} type="button" className="opcao" aria-pressed={formaEntrega === f} onClick={() => setFormaEntrega(f)}>{FORMAS_ENTREGA[f]}</button>)}
+                </div>
+                {formaEntrega.startsWith('cartao') ? <small className="suave">Pagamento por aproximação na maquininha.</small> : null}
+                {formaEntrega === 'dinheiro' ? (
+                  <label className="campo" style={{ marginTop: 4 }}>
+                    <span>Precisa de troco para quanto? (opcional)</span>
+                    <input inputMode="decimal" value={troco} onChange={(e) => setTroco(e.target.value)} placeholder="Ex.: 100" />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="cartao resumo-total">
