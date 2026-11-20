@@ -5,6 +5,7 @@ import { api } from '../../api';
 import { Aviso, Carregando } from '../../componentes/ui';
 import { linkWhatsapp, reais } from '../../utils';
 import { useLoja } from './LayoutLoja';
+import { Preco } from './Vitrine';
 
 export default function ProdutoPagina() {
   const { id } = useParams();
@@ -58,10 +59,10 @@ export default function ProdutoPagina() {
           ) : null}
         </div>
 
-        <div className="pilha">
+        <div className="painel-produto">
           <div className="pilha-p">
-            <h1 style={{ fontSize: '1.5rem' }}>{p.nome}</h1>
-            <span className="preco-grande">{reais(p.preco)}</span>
+            <h1 style={{ fontSize: '1.35rem', fontWeight: 500, fontFamily: 'inherit' }}>{p.nome}</h1>
+            <Preco valor={p.preco} className="preco-grande" />
             {p.descricao ? <p className="suave" style={{ whiteSpace: 'pre-line' }}>{p.descricao}</p> : null}
           </div>
 

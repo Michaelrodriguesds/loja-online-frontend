@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api';
 import { Aviso, Botao, Campo, Carregando, Chave, Girando, useToast } from '../../componentes/ui';
 import { comprimirImagem, enviarFoto, lerValor } from '../../utils';
+import Camera, { cameraDisponivel } from '../../componentes/Camera';
 
 const novaVariacao = () => ({ tamanho: '', cor: '', estoque: '1' });
 const produtoVazio = () => ({ nome: '', descricao: '', categoria: '', preco: '', fotos: [], soNoLocal: false, ativo: true, variacoes: [{ tamanho: 'Único', cor: '', estoque: '1' }] });
@@ -26,6 +27,8 @@ export default function ProdutoForm() {
   const [categorias, setCategorias] = useState([]);
   const [erro, setErro] = useState('');
   const [enviandoFoto, setEnviandoFoto] = useState(false);
+  const [cameraAberta, setCameraAberta] = useState(false);
+  const [usarCameraDoSistema] = useState(() => !cameraDisponivel());
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -48,25 +51,37 @@ export default function ProdutoForm() {
   const mudar = (campo) => (e) => setP({ ...p, [campo]: e.target.value });
   const mudarVar = (i, campo, valor) => setP({ ...p, variacoes: p.variacoes.map((v, j) => (j === i ? { ...v, [campo]: valor } : v)) });
 
-  async function adicionarFotos(e) {
-    const arquivos = [...e.target.files].slice(0, 5 - p.fotos.length);
-    e.target.value = '';
-    if (!arquivos.length) return;
+  // Envia fotos já reduzidas (data URL). Usado pela galeria e pela câmera.
+  async function enviarDados(lista) {
     setEnviandoFoto(true);
     setErro('');
     try {
       const novas = [];
-      for (const arq of arquivos) {
-        const dados = await comprimirImagem(arq);
-        const r = await enviarFoto(api, dados);
-        novas.push(r.url);
-      }
-      setP((atual) => ({ ...atual, fotos: [...atual.fotos, ...novas] }));
+      for (const dados of lista) novas.push((await enviarFoto(api, dados)).url);
+      setP((atual) => ({ ...atual, fotos: [...atual.fotos, ...novas].slice(0, 5) }));
     } catch (err) {
       setErro(err.message);
     } finally {
       setEnviandoFoto(false);
     }
+  }
+
+  async function adicionarFotos(e) {
+    const arquivos = [...e.target.files].slice(0, 5 - p.fotos.length);
+    e.target.value = '';
+    if (!arquivos.length) return;
+    try {
+      const lista = [];
+      for (const arq of arquivos) lista.push(await comprimirImagem(arq));
+      await enviarDados(lista);
+    } catch (err) {
+      setErro(err.message);
+    }
+  }
+
+  function aoTirarFoto(dados) {
+    setCameraAberta(false);
+    enviarDados([dados]);
   }
 
   async function salvar(e) {
@@ -111,7 +126,7 @@ export default function ProdutoForm() {
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
 
       <section className="cartao pilha">
-        <span className="pequeno suave">Fotos (até 5) — a primeira é a capa. Se o celular travar na câmera, use “Galeria”.</span>
+        <span className="pequeno suave">Fotos (até 5) — a primeira é a capa</span>
         <div className="fotos-produto">
           {p.fotos.map((f, i) => (
             <div key={f} className="foto-produto">
@@ -121,10 +136,16 @@ export default function ProdutoForm() {
           ))}
           {p.fotos.length < 5 ? (
             <>
-              <label className="foto-adicionar" style={{ position: 'relative' }}>
-                {enviandoFoto ? <Girando /> : <span>📷<br />Tirar foto</span>}
-                <input type="file" accept="image/*" capture="environment" onChange={adicionarFotos} disabled={enviandoFoto} />
-              </label>
+              {usarCameraDoSistema ? (
+                <label className="foto-adicionar" style={{ position: 'relative' }}>
+                  {enviandoFoto ? <Girando /> : <span>📷<br />Tirar foto</span>}
+                  <input type="file" accept="image/*" capture="environment" onChange={adicionarFotos} disabled={enviandoFoto} />
+                </label>
+              ) : (
+                <button type="button" className="foto-adicionar" style={{ background: 'none' }} disabled={enviandoFoto} onClick={() => setCameraAberta(true)}>
+                  {enviandoFoto ? <Girando /> : <span>📷<br />Tirar foto</span>}
+                </button>
+              )}
               <label className="foto-adicionar" style={{ position: 'relative' }}>
                 {enviandoFoto ? <Girando /> : <span>🖼️<br />Galeria / PC</span>}
                 <input type="file" accept="image/*" multiple onChange={adicionarFotos} disabled={enviandoFoto} />
@@ -168,6 +189,7 @@ export default function ProdutoForm() {
         </section>
       ) : null}
 
+      <Camera aberta={cameraAberta} aoFechar={() => setCameraAberta(false)} aoTirar={aoTirarFoto} />
       <Botao carregando={salvando} className="btn-primario btn-grande">Salvar produto</Botao>
       {editando ? <button type="button" className="btn btn-texto" style={{ color: 'var(--vermelho-texto)' }} onClick={excluir}>Excluir produto</button> : null}
     </form>

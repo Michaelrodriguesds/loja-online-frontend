@@ -10,8 +10,20 @@ const IconeMoto = () => (
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7h11v9H3z" /><path d="M14 10h4l3 3v3h-7z" /><circle cx="7" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" /></svg>
 );
 
+const normalizar = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// Preço no estilo marketplace: R$ 63⁹⁶
+export function Preco({ valor, className = 'preco-card' }) {
+  const [inteiro, centavos] = Number(valor).toFixed(2).split('.');
+  return (
+    <span className={className} aria-label={reais(valor)}>
+      <span className="moeda">R$</span>{Number(inteiro).toLocaleString('pt-BR')}{centavos !== '00' ? <sup>{centavos}</sup> : null}
+    </span>
+  );
+}
+
 export default function Vitrine() {
-  const { loja, slug } = useLoja();
+  const { loja, slug, busca } = useLoja();
   const [produtos, setProdutos] = useState(null);
   const [categoria, setCategoria] = useState('');
   const [erro, setErro] = useState('');
@@ -19,7 +31,9 @@ export default function Vitrine() {
   useEffect(() => { api(`/publico/lojas/${slug}/produtos`, { token: 'nenhum' }).then(setProdutos).catch((e) => setErro(e.message)); }, [slug]);
 
   const categorias = useMemo(() => [...new Set((produtos || []).map((p) => p.categoria))], [produtos]);
-  const visiveis = (produtos || []).filter((p) => !categoria || p.categoria === categoria);
+  const termo = normalizar(busca.trim());
+  const visiveis = (produtos || []).filter((p) => (!categoria || p.categoria === categoria)
+    && (!termo || normalizar(`${p.nome} ${p.categoria} ${p.descricao}`).includes(termo)));
   const { entrega } = loja;
   const textoEntrega = entrega.ativa
     ? `Entregamos em ${entrega.cidades.length ? entrega.cidades.join(', ') : `até ${entrega.raioMaxKm} km`}`
@@ -27,18 +41,19 @@ export default function Vitrine() {
 
   return (
     <div className="pilha">
-      {loja.bannerUrl ? <div className="banner-loja"><img src={loja.bannerUrl} alt="" /></div> : null}
-      {loja.descricao ? <p className="suave">{loja.descricao}</p> : null}
+      {!termo && loja.bannerUrl ? <div className="banner-loja"><img src={loja.bannerUrl} alt="" /></div> : null}
+      {!termo && loja.descricao ? <p className="suave pequeno" style={{ padding: '0 4px' }}>{loja.descricao}</p> : null}
       {!loja.aberta ? <Aviso tipo="alerta">A loja está pausada no momento e não está recebendo pedidos. Você pode olhar os produtos.</Aviso> : null}
-      <div className="faixa-entrega">
+      {termo ? <p className="pequeno suave" style={{ padding: '0 4px' }}>{visiveis.length} {visiveis.length === 1 ? 'resultado' : 'resultados'} para “{busca.trim()}”</p> : null}
+      {!termo ? <div className="faixa-entrega">
         <IconeMoto />
         <div className="pilha-p" style={{ gap: 0 }}>
           <strong>{textoEntrega}</strong>
           <span className="suave pequeno">{entrega.ativa && entrega.retiradaAtiva ? 'Ou retire na loja sem pagar frete' : entrega.ativa ? `Frete a partir de ${reais(entrega.taxaMinima)}` : entrega.prazoRetirada}</span>
         </div>
-      </div>
+      </div> : null}
 
-      {categorias.length > 1 ? (
+      {!termo && categorias.length > 1 ? (
         <div className="chips" role="group" aria-label="Categorias">
           <button className="chip" aria-pressed={!categoria} onClick={() => setCategoria('')}>Todos</button>
           {categorias.map((c) => <button key={c} className="chip" aria-pressed={categoria === c} onClick={() => setCategoria(c)}>{c}</button>)}
@@ -46,7 +61,7 @@ export default function Vitrine() {
       ) : null}
 
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
-      {!produtos ? <Carregando /> : visiveis.length === 0 ? <Vazio titulo="Nenhum produto por enquanto">Volte em breve!</Vazio> : (
+      {!produtos ? <Carregando /> : visiveis.length === 0 ? <Vazio titulo={termo ? 'Nada encontrado' : 'Nenhum produto por enquanto'}>{termo ? 'Tente outra palavra.' : 'Volte em breve!'}</Vazio> : (
         <div className="vitrine">
           {visiveis.map((p) => {
             const esgotado = !p.soNoLocal && p.variacoes.every((v) => v.estoque <= 0);
@@ -54,11 +69,15 @@ export default function Vitrine() {
               <Link key={p._id} to={`/loja/${slug}/produto/${p._id}`} className="cartao-produto">
                 <div className="foto">
                   {p.fotos[0] ? <img src={p.fotos[0]} alt="" loading="lazy" /> : <div className="sem-foto">Sem foto</div>}
-                  {p.soNoLocal ? <span className="selo-foto">Só na loja</span> : esgotado ? <span className="selo-foto">Esgotado</span> : null}
+                  {esgotado ? <span className="selo-foto">Esgotado</span> : null}
                 </div>
                 <div className="info">
                   <span className="nome">{p.nome}</span>
-                  <span className="preco">{reais(p.preco)}</span>
+                  <Preco valor={p.preco} />
+                  {p.soNoLocal ? <span className="etiqueta cinza">Disponível na loja</span>
+                    : esgotado ? null
+                      : loja.entrega.ativa ? <span className="etiqueta">Entrega local</span>
+                        : <span className="etiqueta">Retire na loja</span>}
                 </div>
               </Link>
             );
