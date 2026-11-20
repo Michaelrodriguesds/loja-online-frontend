@@ -41,11 +41,12 @@ export default function EntregaPix() {
         corpo: {
           entrega: { ativa: e.ativa, valorKm, taxaMinima: taxa, raioMaxKm: Number(e.raioMaxKm), calculo: e.calculo, cidades: e.cidades, prazo: e.prazo, retiradaAtiva: e.retiradaAtiva, prazoRetirada: e.prazoRetirada },
           endereco: end,
-          pagamento: { chavePix: pg.chavePix.trim(), nomeRecebedor: pg.nomeRecebedor.trim(), cidade: pg.cidade.trim(), aceitaNaEntrega: pg.aceitaNaEntrega },
+          pagamento: { tipoChave: pg.tipoChave || '', chavePix: pg.chavePix.trim(), nomeRecebedor: pg.nomeRecebedor.trim(), cidade: pg.cidade.trim(), aceitaNaEntrega: pg.aceitaNaEntrega },
           regras: { horasParaExpirar: Math.min(168, Math.max(1, parseInt(horas, 10) || 12)) },
         },
       });
       if (r.avisoEndereco) setAviso(r.avisoEndereco);
+      setPg({ ...r.loja.pagamento }); // mostra a chave já no formato do banco
       toast('Configurações salvas!');
       recarregar();
     } catch (err) {
@@ -112,7 +113,21 @@ export default function EntregaPix() {
 
       <section className="cartao pilha">
         <h2>Pagamento</h2>
-        <Campo rotulo="Chave Pix" ajuda="CPF, CNPJ, e-mail, telefone (+5521...) ou chave aleatória"><input value={pg.chavePix} maxLength={77} onChange={(x) => setPg({ ...pg, chavePix: x.target.value })} /></Campo>
+        <div className="grade-2 quebra">
+          <Campo rotulo="Tipo da chave Pix">
+            <select value={pg.tipoChave || ''} onChange={(x) => setPg({ ...pg, tipoChave: x.target.value })}>
+              <option value="">Escolha…</option>
+              <option value="cpf">CPF</option>
+              <option value="cnpj">CNPJ</option>
+              <option value="telefone">Celular</option>
+              <option value="email">E-mail</option>
+              <option value="aleatoria">Chave aleatória</option>
+            </select>
+          </Campo>
+          <Campo rotulo="Chave Pix" ajuda="Pode digitar com pontos e traços: o app ajusta">
+            <input value={pg.chavePix} maxLength={77} onChange={(x) => setPg({ ...pg, chavePix: x.target.value })} placeholder={{ cpf: '000.000.000-00', cnpj: '00.000.000/0000-00', telefone: '(21) 99999-0000', email: 'voce@email.com', aleatoria: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' }[pg.tipoChave] || ''} />
+          </Campo>
+        </div>
         <div className="grade-2">
           <Campo rotulo="Nome do recebedor" ajuda="Como aparece no banco"><input value={pg.nomeRecebedor} maxLength={25} onChange={(x) => setPg({ ...pg, nomeRecebedor: x.target.value })} /></Campo>
           <Campo rotulo="Cidade do recebedor"><input value={pg.cidade} maxLength={15} onChange={(x) => setPg({ ...pg, cidade: x.target.value })} /></Campo>

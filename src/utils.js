@@ -91,7 +91,7 @@ export async function comprimirImagem(arquivo, ladoMax = 1200) {
   let dados = canvas.toDataURL('image/webp', qualidade);
   const tipo = dados.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg'; // iPhone antigo não gera webp
   if (tipo === 'image/jpeg') dados = canvas.toDataURL(tipo, qualidade);
-  while (dados.length > 850_000 && qualidade > 0.4) {
+  while (dados.length > 600_000 && qualidade > 0.4) {
     qualidade -= 0.12;
     dados = canvas.toDataURL(tipo, qualidade);
   }
